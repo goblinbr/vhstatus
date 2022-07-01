@@ -3,4 +3,4 @@ logs/
 node_modules
 .history
 package-lock.json
-players.json
+players.json*

@@ -20,6 +20,7 @@ wss.on('connection', socket => {
 if (config.playersJson && fs.existsSync(config.playersJson)) {
 	try {
 		playersById = JSON.parse(fs.readFileSync(config.playersJson));
+		fs.copyFileSync(config.playersJson, config.playersJson + '.' + new Date().toISOString().replace(/\:/g, '-'));
 	} catch(e) {
 		console.error(e);
 	}
@@ -32,7 +33,7 @@ function sendPlayers() {
 		} else {
 			const lines = data.split("\n");
 
-			let playersWithoutName = [];
+			let connectingPlayers = [];
 			for (let line of lines) {
 				const handshake = line.match(/(handshake from client )(\d+)/);
 				const zdoid = line.match(/(Got character ZDOID from )([a-zA-Z\u00C0-\u00FF ]+)(\s:)/);
@@ -40,48 +41,53 @@ function sendPlayers() {
 				if (handshake) {
 					const id = handshake[2];
 					const time = new Date(line.match(/\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}/));
-					const minutesConnected = Math.round((new Date() - time) / 60000);
-					const player = {id, connected: time, disconnected: null, name: null, minutesConnected, totalMinutesConnected: 0, lastDisconnected: null};
-					if (playersById[id]) {
-						player.totalMinutesConnected = playersById[id].totalMinutesConnected;
-						player.lastDisconnected = playersById[id].lastDisconnected;
+					const oldPlayer = playersById[id];
+					if (!oldPlayer || oldPlayer.lastDisconnected && new Date(oldPlayer.lastDisconnected) < time) {
+						const minutesConnected = Math.round((new Date() - time) / 60000);
+						const newPlayer = {id, connected: time, disconnected: null, name: null, minutesConnected, totalMinutesConnected: 0, lastDisconnected: null};
+						if (oldPlayer) {
+							newPlayer.name = oldPlayer.name;
+							newPlayer.totalMinutesConnected = oldPlayer.totalMinutesConnected;
+							newPlayer.lastDisconnected = oldPlayer.lastDisconnected;
+						}
+						connectingPlayers.push(newPlayer);
 					}
-					playersById[id] = player;
-					playersWithoutName.push(player);
 				}
 				if (disconnected) {
 					const id = disconnected[2];
-					const player = playersById[id];
-					if (player) {
-						const time = new Date(line.match(/\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}/));
-						player.disconnected = time;
-						player.minutesConnected = Math.round((new Date(player.disconnected) - new Date(player.connected)) / 60000);
-						if (!player.lastDisconnected || new Date(player.lastDisconnected) < new Date(player.disconnected)) {
-							player.totalMinutesConnected += player.minutesConnected;
-							player.lastDisconnected = player.disconnected;
+					const connectingPlayer = connectingPlayers.filter(e => e.id == id)[0];
+					if (connectingPlayer) {
+						connectingPlayers.splice(connectingPlayers.indexOf(connectingPlayer), 1);
+					} else {
+						const player = playersById[id];
+						if (player) {
+							const time = new Date(line.match(/\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}/));
+							if (!player.lastDisconnected || new Date(player.lastDisconnected) < time) {
+								player.disconnected = time;
+								player.minutesConnected = Math.round((new Date(player.disconnected) - new Date(player.connected)) / 60000);
+								player.totalMinutesConnected += player.minutesConnected;
+								player.lastDisconnected = player.disconnected;
+							}
 						}
 					}
 				}
 				if (zdoid) {
 					const playerName = zdoid[2];
-					if (playersWithoutName.length > 0) {
-						const player = playersWithoutName[0];
+					if (connectingPlayers.length > 0) {
+						const player = connectingPlayers[0];
 						player.name = playerName;
+						playersById[player.id] = player;
 						for (const pId in playersById) {
 							if (playersById[pId].name == playerName && pId !== player.id) {
 								if (playersById[pId].totalMinutesConnected) {
 									player.totalMinutesConnected += playersById[pId].totalMinutesConnected;
+									player.lastDisconnected += playersById[pId].lastDisconnected;
 								}
 								delete playersById[pId];
 							}
 						}
-						playersWithoutName.splice(0, 1);
+						connectingPlayers.splice(0, 1);
 					}
-				}
-			}
-			for (const pId in playersById) {
-				if (!playersById[pId].name) {
-					delete playersById[pId];
 				}
 			}
 			wss.clients.forEach((client) => {
