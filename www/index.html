@@ -1,68 +1,78 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-	<link rel="preconnect" href="https://fonts.gstatic.com">
-	<link href="https://fonts.googleapis.com/css2?family=Alegreya+Sans&display=swap" rel="stylesheet">
-    <title>Valheim server status</title>
-	<style>
-		html {
-			background-color: rgb(13, 29, 40);
-			color: white;
-			font-family: "Alegreya Sans", sans-serif;
-		}
-	</style>
-  </head>
-  <body>
-	<h1>Valheim players in <span id="server"></span></h1>
-	<h2>Online (<span id="online-count"></span>)</h2>
-	<ul id="online"></ul>
-	<h2>Offline<span id="offline-count"></span></h2>
-	<ul id="offline"></ul>
+	<head>
+		<meta charset="UTF-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+		<title>Valheim server status</title>
+		<style>
+			table, td, th { border: 1px solid; }
+			table {	border-collapse: collapse; }
+			td, th { padding: 4px 8px; }
+		</style>
+	</head>
+	<body>
+		<h1>Jogadores em <span id="server"></span></h1>
+		<h2>Online (<span id="online-count"></span>)</h2>
+		<table>
+			<tr>
+				<th>Jogador</th>
+				<th>Conectado</th>
+				<th>Tempo conectado</th>
+				<th>Tempo total</th>
+			</tr>
+			<tbody id="online">
+			</tbody>
+		</table>
+		<h2>Offline<span id="offline-count"></span></h2>
+		<table>
+			<tr>
+				<th>Jogador</th>
+				<th>Última conexão</th>
+				<th>Tempo total</th>
+			</tr>
+			<tbody id="offline">
+			</tbody>
+		</table>
+		<script>
+			const online = document.querySelector("#online");
+			const onlineCount = document.querySelector("#online-count");
+			const offline = document.querySelector("#offline");
+			const offlineCount = document.querySelector("#offline-count");
+			const server = document.querySelector("#server");
+			
+			(function() {
+				window.onload = function() {
+					const socket = new WebSocket('ws://' + window.location.host);
 
-    <script>
-		let online = document.querySelector("#online");
-		let onlineCount = document.querySelector("#online-count");
-		let offline = document.querySelector("#offline");
-		let offlineCount = document.querySelector("#offline-count");
-		let server = document.querySelector("#server");
+					// Listen for messages
+					socket.addEventListener('message', function(event) {
+						online.innerHTML = "";
+						offline.innerHTML = "";
+						const data = JSON.parse(event.data);
+						for (const player of data.players) {
+							let tr = document.createElement("tr");
+							if (player.disconnected) {
+								tr.innerHTML = `<td>${player.name}</td><td>${formatDate(player.disconnected)}</td><td>${player.totalMinutesConnected} minuto(s)</td>`;
+								offline.append(tr);
+							} else {
+								tr.innerHTML = `<td>${player.name}</td><td>${formatDate(player.connected)}</td><td>${player.minutesConnected} minuto(s)</td><td>${player.totalMinutesConnected + player.minutesConnected} minuto(s)</td>`;
+								online.append(tr);
+							}
+						}
+						onlineCount.innerHTML = document.querySelectorAll("#online > li").length;
+						server.innerHTML = data.serverName;
+					});
+				};
 
-      (function() {
-        window.onload = function() {
-          const socket = new WebSocket('ws://'+window.location.host);
-
-          // Listen for messages
-          socket.addEventListener('message', function(event) {
-			  online.innerHTML = "";
-			  offline.innerHTML = "";
-			  let data = JSON.parse(event.data);
-			  let users = data.users;
-			  for (let user in users) {
-				  if (!users[user].user) continue; //User that didn't login properly
-				  let li = document.createElement("li");
-				  if (users[user].disconnected) {
-					  li.innerHTML = `<strong><em>${users[user].user}</em></strong>
-					  <ul>
-					  	<li>Connected: ${new Date(users[user].connected)})</li>
-					  	<li>Disconnected: ${new Date(users[user].disconnected)}</li>
-					  </ul>
-					  `
-					 offline.append(li);
-				  } else {
-					  li.innerHTML = `<strong><em>${users[user].user}</em></strong>
-					  <ul>
-					  	<li>Connected: ${new Date(users[user].connected)})</li>
-					  </ul>
-					  `
-				  	  online.append(li);
-				  }
-			  }
-			  onlineCount.innerHTML = document.querySelectorAll("#online > li").length;
-			  server.innerHTML = data.serverName;
-          });
-        };
-      })();
-    </script>
-  </body>
+				function formatDate(dateStr) {
+					var options = { day: 'numeric', month: 'numeric', year: 'numeric' };
+					const date = new Date(dateStr);
+					const dateTimeVals = date.toString().split('GMT')[0].trim().split(' ');
+					const time = dateTimeVals[dateTimeVals.length - 1];
+					return date.toLocaleDateString('pt-BR', { day: 'numeric', month: 'numeric', year: 'numeric' }) + ' às ' + time;
+				}
+			})();
+			  
+		</script>
+	</body>
 </html>
