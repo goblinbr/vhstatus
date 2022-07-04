@@ -19,6 +19,7 @@
 				<th>Conectado</th>
 				<th>Tempo conectado</th>
 				<th>Tempo total</th>
+				<th>Mortes</th>
 			</tr>
 			<tbody id="online">
 			</tbody>
@@ -29,6 +30,7 @@
 				<th>Jogador</th>
 				<th>Última conexão</th>
 				<th>Tempo total</th>
+				<th>Mortes</th>
 			</tr>
 			<tbody id="offline">
 			</tbody>
@@ -52,10 +54,17 @@
 						for (const player of data.players) {
 							let tr = document.createElement("tr");
 							if (player.disconnected) {
-								tr.innerHTML = `<td>${player.name}</td><td>${formatDate(player.disconnected)}</td><td>${player.totalMinutesConnected} minuto(s)</td>`;
+								tr.innerHTML += `<td>${player.name}</td>`;
+								tr.innerHTML += `<td>${formatDate(player.disconnected)}</td>`;
+								tr.innerHTML += `<td>${formatTempoHoras(player.totalMinutesConnected)}</td>`;
+								tr.innerHTML += `<td>${player.deaths}</td>`;
 								offline.append(tr);
 							} else {
-								tr.innerHTML = `<td>${player.name}</td><td>${formatDate(player.connected)}</td><td>${player.minutesConnected} minuto(s)</td><td>${player.totalMinutesConnected + player.minutesConnected} minuto(s)</td>`;
+								tr.innerHTML += `<td>${player.name}</td>`;
+								tr.innerHTML += `<td>${formatDate(player.connected)}</td>`;
+								tr.innerHTML += `<td>${player.minutesConnected} minuto(s)</td>`;
+								tr.innerHTML += `<td>${formatTempoHoras(player.totalMinutesConnected + player.minutesConnected)}</td>`;
+								tr.innerHTML += `<td>${player.deaths}</td>`;
 								online.append(tr);
 							}
 						}
@@ -70,6 +79,18 @@
 					const dateTimeVals = date.toString().split('GMT')[0].trim().split(' ');
 					const time = dateTimeVals[dateTimeVals.length - 1];
 					return date.toLocaleDateString('pt-BR', { day: 'numeric', month: 'numeric', year: 'numeric' }) + ' às ' + time;
+				}
+
+				function formatTempoHoras(minutos) {
+					let remainMinutes = minutos % 60;
+					let hours = Math.floor(minutos / 60);
+					if (hours < 9) {
+						hours = '0' + hours;
+					}
+					if (remainMinutes < 9) {
+						remainMinutes = '0' + remainMinutes;
+					}
+					return hours + ':' + remainMinutes;
 				}
 			})();
 			  
