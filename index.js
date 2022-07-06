@@ -36,7 +36,7 @@ function sendPlayers() {
 			let connectingPlayers = [];
 			for (let line of lines) {
 				const handshake = line.match(/(handshake from client )(\d+)/);
-				const zdoid = line.match(/(Got character ZDOID from )([a-zA-Z\u00C0-\u00FF ]+)(\s:\s)([0-9]*:[0-9]*)/);
+				const zdoid = line.match(/(Got character ZDOID from )([a-zA-Z\u00C0-\u00FF ]+)(\s:\s)([\-|0-9]*:[\-|0-9]*)/);
 				const disconnected = line.match(/(Closing socket )(\d\d+)/)
 				if (handshake) {
 					const id = handshake[2];
