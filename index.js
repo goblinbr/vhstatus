@@ -10,6 +10,8 @@ app.use(express.static('www'))
 const server = http.createServer(app);
 const wss = new ws.Server({ server });
 
+
+
 const config = JSON.parse(fs.readFileSync("config.json", "utf8"));
 
 wss.on('connection', socket => {
@@ -134,5 +136,9 @@ function copyStats(dest, orig) {
 setTimeout(sendPlayers, config.freq);
 
 server.listen(config.port, () => {
-  console.log(`Valheim status at http://localhost:${config.port}`)
-})
+	console.log(`Valheim status at http://localhost:${config.port}`);
+});
+
+app.get('/log', (req, res) => {
+	res.send(fs.readFileSync(config.log, "utf8"));
+});
