@@ -10,6 +10,40 @@ app.use(express.static('www'))
 const server = http.createServer(app);
 const wss = new ws.Server({ server });
 
+const wsOptions = {
+	origin: 'https://panel.aleforge.net'
+};
+
+const wsClient = new ws("wss://tx1.aleforge.net:8080/api/servers/b616e187-8c56-4055-8524-060d7f4124e2/ws", wsOptions);
+ 
+wsClient.onmessage = (event) => {
+	if (event && event.type == 'message') {
+		const data = JSON.parse(event.data);
+		if (data.event == 'console output') {
+			console.log(data.args.join('\n'));
+		} else if (data.event == 'stats') {
+			//ignorar
+		} else if (data.event == 'auth success') {
+			const msg = '{ "event": "send logs" }';
+			wsClient.send(msg);
+		}
+	}	
+};
+
+wsClient.onopen = (event) => {
+	console.log('connected', event);
+	const authMsg = '{ "args": ["token"], "event": "auth" }';
+	wsClient.send(authMsg);
+};
+
+wsClient.onclose = (event) => {
+	console.log('disconnected', event);
+};
+
+wsClient.onerror = (event) => {
+	console.log('onerror', event);
+};
+
 const config = JSON.parse(fs.readFileSync("config.json", "utf8"));
 
 wss.on('connection', socket => {
