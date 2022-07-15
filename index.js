@@ -1,55 +1,19 @@
 const http = require("http")
+const https = require("https")
 const express = require('express')
 const app = express()
 const fs = require("fs");
 const ws = require('ws');
+const Ssh2Client = require('ssh2').Client;
+
 let playersById = {}
+let lastReadLineTime = null;
 
 app.use(express.static('www'))
 
+const config = JSON.parse(fs.readFileSync("config.json", "utf8"));
 const server = http.createServer(app);
 const wss = new ws.Server({ server });
-
-const wsOptions = {
-	origin: 'https://panel.aleforge.net'
-};
-
-const wsClient = new ws("wss://tx1.aleforge.net:8080/api/servers/b616e187-8c56-4055-8524-060d7f4124e2/ws", wsOptions);
- 
-wsClient.onmessage = (event) => {
-	if (event && event.type == 'message') {
-		const data = JSON.parse(event.data);
-		if (data.event == 'console output') {
-			console.log(data.args.join('\n'));
-		} else if (data.event == 'stats') {
-			//ignorar
-		} else if (data.event == 'auth success') {
-			const msg = '{ "event": "send logs" }';
-			wsClient.send(msg);
-		}
-	}	
-};
-
-wsClient.onopen = (event) => {
-	console.log('connected', event);
-	const authMsg = '{ "args": ["token"], "event": "auth" }';
-	wsClient.send(authMsg);
-};
-
-wsClient.onclose = (event) => {
-	console.log('disconnected', event);
-};
-
-wsClient.onerror = (event) => {
-	console.log('onerror', event);
-};
-
-const config = JSON.parse(fs.readFileSync("config.json", "utf8"));
-
-wss.on('connection', socket => {
-  socket.on('message', message => console.log(message));
-  sendPlayers();
-});
 
 if (config.playersJson && fs.existsSync(config.playersJson)) {
 	try {
@@ -60,97 +24,128 @@ if (config.playersJson && fs.existsSync(config.playersJson)) {
 	}
 }
 
-function sendPlayers() {
-	fs.readFile(config.log, "utf8", (err, data) => {
-		if (err) {
-			console.log(err);
-		} else {
-			const lines = data.split("\n");
+function readLogAgain() {
+	setTimeout(readLog, config.readLogFreq);
+}
 
-			let connectingPlayers = [];
-			for (let line of lines) {
-				const handshake = line.match(/(handshake from client )(\d+)/);
-				const zdoid = line.match(/(Got character ZDOID from )([a-zA-Z\u00C0-\u00FF ]+)(\s:\s)([\-|0-9]*:[\-|0-9]*)/);
-				const disconnected = line.match(/(Closing socket )(\d\d+)/)
-				if (handshake) {
-					const id = handshake[2];
-					const time = new Date(line.match(/\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}/));
-					const oldPlayer = playersById[id];
-					if (!oldPlayer || oldPlayer.lastDisconnected && new Date(oldPlayer.lastDisconnected) < time) {
-						const minutesConnected = Math.round((new Date() - time) / 60000);
-						const newPlayer = {id, connected: time, disconnected: null, name: null, minutesConnected, totalMinutesConnected: 0, lastDisconnected: null, deaths: 0, lastDeath: null};
-						if (oldPlayer) {
-							newPlayer.name = oldPlayer.name;
-							copyStats(newPlayer, oldPlayer);
-						}
-						connectingPlayers.push(newPlayer);
-					}
+function readLog() {
+	const conn = new Ssh2Client();
+	conn.on('ready', function() {
+		conn.sftp((err, sftp) => {
+			 if (err) {
+				console.error(err);
+				readLogAgain();
+				return;
+			 }
+			 sftp.readFile(config.log, (err, buffer) => {
+				if (err) {
+					console.error(err);
+					readLogAgain();
+					return;
 				}
-				if (disconnected) {
-					const id = disconnected[2];
-					const connectingPlayer = connectingPlayers.filter(e => e.id == id)[0];
-					if (connectingPlayer) {
-						connectingPlayers.splice(connectingPlayers.indexOf(connectingPlayer), 1);
-					} else {
-						const player = playersById[id];
-						if (player) {
-							const time = new Date(line.match(/\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}/));
-							if (!player.lastDisconnected || new Date(player.lastDisconnected) < time) {
-								player.disconnected = time;
-								player.minutesConnected = Math.round((new Date(player.disconnected) - new Date(player.connected)) / 60000);
-								player.totalMinutesConnected += player.minutesConnected;
-								player.lastDisconnected = player.disconnected;
+				const data = buffer.toString();
+				const lines = data.split("\n");
+				
+				let connectingPlayers = [];
+				for (let line of lines) {
+					const dateHourStr = line.match(/\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}/);
+					const logTime = dateHourStr ? new Date(dateHourStr) : null;
+					let time = logTime;
+					if (time) {
+						if (config.gmtHourDifference) {
+							time = new Date(time.setHours(time.getHours() + config.gmtHourDifference));
+						}
+						if (!lastReadLineTime || lastReadLineTime < time) {
+							lastReadLineTime = time;
+						}
+					}
+
+					const handshake = line.match(/(handshake from client )(\d+)/);
+					const zdoid = line.match(/(Got character ZDOID from )([a-zA-Z\u00C0-\u00FF ]+)(\s:\s)([\-|0-9]*:[\-|0-9]*)/);
+					const disconnected = line.match(/(Closing socket )(\d\d+)/)
+					if (handshake) {
+						const id = handshake[2];
+						const oldPlayer = playersById[id];
+						if (!oldPlayer || oldPlayer.lastDisconnected && new Date(oldPlayer.lastDisconnected) < time) {
+							const minutesConnected = Math.round((new Date() - time) / 60000);
+							const newPlayer = {id, connected: time, disconnected: null, name: null, minutesConnected, totalMinutesConnected: 0, lastDisconnected: null, deaths: 0, lastDeath: null};
+							if (oldPlayer) {
+								newPlayer.name = oldPlayer.name;
+								copyStats(newPlayer, oldPlayer);
 							}
+							connectingPlayers.push(newPlayer);
 						}
 					}
-				}
-				if (zdoid) {
-					const playerName = zdoid[2];
-					const location = zdoid[4];
-					if (location == '0:0') {
-						const player = Object.values(playersById).filter(e => e.name == playerName)[0];
-						if (player) {
-							const time = new Date(line.match(/\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}:\d{2}/));
-							if (!player.lastDeath || new Date(player.lastDeath) < time) {
-								if (!player.deaths) {
-									player.deaths = 0;
+					if (disconnected) {
+						const id = disconnected[2];
+						const connectingPlayer = connectingPlayers.filter(e => e.id == id)[0];
+						if (connectingPlayer) {
+							connectingPlayers.splice(connectingPlayers.indexOf(connectingPlayer), 1);
+						} else {
+							const player = playersById[id];
+							if (player) {
+								if (!player.lastDisconnected || new Date(player.lastDisconnected) < time) {
+									player.disconnected = time;
+									player.minutesConnected = Math.round((new Date(player.disconnected) - new Date(player.connected)) / 60000);
+									player.totalMinutesConnected += player.minutesConnected;
+									player.lastDisconnected = player.disconnected;
 								}
-								player.deaths++;
-								player.lastDeath = time;
 							}
 						}
-					} else if (connectingPlayers.length > 0) {
-						const player = connectingPlayers[0];
-						player.name = playerName;
-						playersById[player.id] = player;
-						for (const pId in playersById) {
-							if (playersById[pId].name == playerName && pId !== player.id) {
-								if (playersById[pId].totalMinutesConnected) {
-									copyStats(player, playersById[pId]);
+					}
+					if (zdoid) {
+						const playerName = zdoid[2];
+						const location = zdoid[4];
+						if (location == '0:0') {
+							const player = Object.values(playersById).filter(e => e.name == playerName)[0];
+							if (player) {
+								if (!player.lastDeath || new Date(player.lastDeath) < time) {
+									if (!player.deaths) {
+										player.deaths = 0;
+									}
+									player.deaths++;
+									player.lastDeath = time;
 								}
-								delete playersById[pId];
 							}
+						} else if (connectingPlayers.length > 0) {
+							const player = connectingPlayers[0];
+							player.name = playerName;
+							playersById[player.id] = player;
+							for (const pId in playersById) {
+								if (playersById[pId].name == playerName && pId !== player.id) {
+									if (playersById[pId].totalMinutesConnected) {
+										copyStats(player, playersById[pId]);
+									}
+									delete playersById[pId];
+								}
+							}
+							connectingPlayers.splice(0, 1);
 						}
-						connectingPlayers.splice(0, 1);
 					}
 				}
-			}
-			wss.clients.forEach((client) => {
-				const data = {
-					players: Object.values(playersById),
-					serverName: config.serverName
-				};
-				client.send(JSON.stringify(data));
-			});
-			if (config.playersJson) {
-				try {
-					fs.writeFileSync(config.playersJson, JSON.stringify(playersById));
-				} catch(e) {
-					console.error(e);
+				if (config.playersJson) {
+					try {
+						fs.writeFileSync(config.playersJson, JSON.stringify(playersById));
+					} catch(e) {
+						console.error(e);
+					}
 				}
-			}
-		}
-		setTimeout(sendPlayers, config.freq);
+				readLogAgain();
+			 });
+		});
+	}).connect(config.aleforgeSftpConnectConfig);
+}
+setTimeout(readLog);
+
+function sendPlayers() {
+	const dataStr = JSON.stringify({
+		players: Object.values(playersById),
+		serverName: config.serverName,
+		lastReadLineTime
+	});
+
+	wss.clients.forEach((client) => {
+		client.send(dataStr);
 	});
 }
 
@@ -165,7 +160,9 @@ function copyStats(dest, orig) {
 	}
 }
 
-setTimeout(sendPlayers, config.freq);
+wss.on('connection', sendPlayers);
+
+setInterval(sendPlayers, config.freq);
 
 server.listen(config.port, () => {
   console.log(`Valheim status at http://localhost:${config.port}`)

@@ -5,9 +5,13 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 		<title>Valheim server status</title>
 		<style>
-			table, td, th { border: 1px solid; }
-			table {	border-collapse: collapse; }
-			td, th { padding: 4px 8px; }
+table, td, th {border: 1px solid;}
+table {border-collapse: collapse;}
+td, th {padding: 4px 8px;}
+h2 {margin-bottom: 6px;}
+.mt-20 {margin-top: 20px;}
+.spin {display: inline-block; margin-left: 8px; width: 0px; animation-name: spin; animation-duration: 500ms; animation-iteration-count: infinite; animation-timing-function: linear;}
+@keyframes spin { from {transform:rotate(0deg);} to {transform:rotate(360deg);}}
 		</style>
 	</head>
 	<body>
@@ -35,12 +39,16 @@
 			<tbody id="offline">
 			</tbody>
 		</table>
+		<div class="mt-20">
+			<small>Hora da última linha: <span id="lastReadLineTime"><div class="spin">*</div></span></small>
+		</div>
 		<script>
 			const online = document.querySelector("#online");
 			const onlineCount = document.querySelector("#online-count");
 			const offline = document.querySelector("#offline");
 			const offlineCount = document.querySelector("#offline-count");
 			const server = document.querySelector("#server");
+			const lastReadLineTime = document.querySelector("#lastReadLineTime");
 			
 			(function() {
 				window.onload = function() {
@@ -68,12 +76,19 @@
 								online.append(tr);
 							}
 						}
+
+						if (data.lastReadLineTime) {
+							lastReadLineTime.innerHTML = formatDate(data.lastReadLineTime);
+						}
 						onlineCount.innerHTML = document.querySelectorAll("#online > li").length;
 						server.innerHTML = data.serverName;
 					});
 				};
 
 				function formatDate(dateStr) {
+					if (!dateStr) {
+						return '';
+					}
 					var options = { day: 'numeric', month: 'numeric', year: 'numeric' };
 					const date = new Date(dateStr);
 					const dateTimeVals = date.toString().split('GMT')[0].trim().split(' ');

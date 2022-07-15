@@ -1,5 +1,13 @@
 {
-  "log": "/home/vhserver/log/console/vhserver-console.log",
+  "log": "log/server.log",
+  "readLogFreq": 10000,
+  "aleforgeSftpConnectConfig": {
+    "host": "xxx.aleforge.net",
+    "port": 9999,
+    "username": "sftpUser",
+    "password": "sftpPassword"
+  },
+  "gmtHourDifference": 0,
   "playersJson": "/home/vhserver/players.json",
   "freq": 5000,
   "serverName": "Valheim Server",
