@@ -160,7 +160,7 @@ function copyStats(dest, orig) {
 	}
 	if (orig.deaths) {
 		dest.deaths = orig.deaths;
-		dest.lastDeath = orig.deaths;
+		dest.lastDeath = orig.lastDeath;
 	}
 }
 
