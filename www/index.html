@@ -99,10 +99,10 @@ h2 {margin-bottom: 6px;}
 				function formatTempoHoras(minutos) {
 					let remainMinutes = minutos % 60;
 					let hours = Math.floor(minutos / 60);
-					if (hours < 9) {
+					if (hours <= 9) {
 						hours = '0' + hours;
 					}
-					if (remainMinutes < 9) {
+					if (remainMinutes <= 9) {
 						remainMinutes = '0' + remainMinutes;
 					}
 					return hours + ':' + remainMinutes;
