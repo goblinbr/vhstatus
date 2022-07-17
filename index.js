@@ -34,6 +34,7 @@ function readLogAgain() {
 
 function readLog() {
 	const conn = new Ssh2Client();
+
 	conn.on('ready', function() {
 		conn.sftp((err, sftp) => {
 			 if (err) {
@@ -137,7 +138,15 @@ function readLog() {
 				readLogAgain();
 			 });
 		});
-	}).connect(config.aleforgeSftpConnectConfig);
+	});
+
+	conn.on('error', function(err) {
+		console.log('Connection error');
+		console.error(err);
+		readLogAgain();
+	});
+
+	conn.connect(config.aleforgeSftpConnectConfig);
 }
 setTimeout(readLog);
 
