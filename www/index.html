@@ -28,7 +28,7 @@ h2 {margin-bottom: 6px;}
 			<tbody id="online">
 			</tbody>
 		</table>
-		<h2>Offline<span id="offline-count"></span></h2>
+		<h2>Offline (<span id="offline-count"></span>)</h2>
 		<table>
 			<tr>
 				<th>Jogador</th>
@@ -58,6 +58,8 @@ h2 {margin-bottom: 6px;}
 					socket.addEventListener('message', function(event) {
 						online.innerHTML = "";
 						offline.innerHTML = "";
+						let onlinePlayersCount = 0;
+						let offlinePlayersCount = 0;
 						const data = JSON.parse(event.data);
 						for (const player of data.players) {
 							let tr = document.createElement("tr");
@@ -67,6 +69,8 @@ h2 {margin-bottom: 6px;}
 								tr.innerHTML += `<td>${formatTempoHoras(player.totalMinutesConnected)}</td>`;
 								tr.innerHTML += `<td>${player.deaths}</td>`;
 								offline.append(tr);
+
+								offlinePlayersCount++;
 							} else {
 								tr.innerHTML += `<td>${player.name}</td>`;
 								tr.innerHTML += `<td>${formatDate(player.connected)}</td>`;
@@ -74,13 +78,16 @@ h2 {margin-bottom: 6px;}
 								tr.innerHTML += `<td>${formatTempoHoras(player.totalMinutesConnected + player.minutesConnected)}</td>`;
 								tr.innerHTML += `<td>${player.deaths}</td>`;
 								online.append(tr);
+
+								onlinePlayersCount++;
 							}
 						}
 
 						if (data.lastReadLineTime) {
 							lastReadLineTime.innerHTML = formatDate(data.lastReadLineTime);
 						}
-						onlineCount.innerHTML = document.querySelectorAll("#online > li").length;
+						onlineCount.innerHTML = onlinePlayersCount;
+						offlineCount.innerHTML = offlinePlayersCount;
 						server.innerHTML = data.serverName;
 					});
 				};
